@@ -22,7 +22,7 @@ async function run() {
 
         bash.line(tl.getInput('args', false));
 
-        createDockerEnvVarFile(envVarFilePath)
+        await createDockerEnvVarFile(envVarFilePath);
         
         const options = {
             failOnStdErr: false
@@ -33,14 +33,11 @@ async function run() {
     } catch (err) {
         tl.setResult(tl.TaskResult.Failed, null);
     } finally {
-        await fs.unlink(envVarFilePath, (error) => {
-            if(error) throw error;
-        });
+        await fs.promises.unlink(envVarFilePath);
     }
 }
 
 async function createDockerEnvVarFile(envVarFilePath: string) {
-    const taskVariables = tl.getVariables();
     var variableString: string = ""
 
     const systemVariableNames: Set<string> = new Set<string>();
@@ -52,7 +49,7 @@ async function createDockerEnvVarFile(envVarFilePath: string) {
         systemVariableNames.add(variableName)
     }
 
-    const workingDirectory: string = tl.getInput('cwd', false) || "";
+    const workingDirectory: string = tl.getInput('cwd', false) || process.env.SYSTEM_DEFAULTWORKINGDIRECTORY;
     const appLocation: string = tl.getInput('app_location', false) || "";
     const appBuildCommand: string = tl.getInput('app_build_command', false) || "";
     const outputLocation: string = tl.getInput('output_location', false) || "";
@@ -85,26 +82,26 @@ async function createDockerEnvVarFile(envVarFilePath: string) {
 
     addSystemVariableToString("DEPLOYMENT_TOKEN", apiToken);
 
+    const containerWorkingDir = "/working_dir";
+    process.env['SWA_WORKSPACE_DIR'] = containerWorkingDir;
     process.env['SWA_WORKING_DIR'] = workingDirectory;
     process.env['SWA_DEPLOYMENT_CLIENT'] = deploymentClient;
 
-    systemVariableNames.add("GITHUB_WORKSPACE")
-    systemVariableNames.add("DEPLOYMENT_PROVIDER")
-    systemVariableNames.add("REPOSITORY_URL")
-    systemVariableNames.add("IS_PULL_REQUEST")
-    systemVariableNames.add("BASE_BRANCH")
+    addSystemVariableToString("GITHUB_WORKSPACE", "");
+    addSystemVariableToString("DEPLOYMENT_PROVIDER", "DevOps");
+    addSystemVariableToString("REPOSITORY_URL", process.env.BUILD_REPOSITORY_URI || "");
+    addSystemVariableToString("IS_PULL_REQUEST", "");
+    addSystemVariableToString("BASE_BRANCH", "");
+    addSystemVariableToString("REPOSITORY_BASE", containerWorkingDir);
+    addSystemVariableToString("BRANCH", process.env.BUILD_SOURCEBRANCHNAME || "");
+    addSystemVariableToString("DEPLOYMENT_ACTION", "upload");
 
-    taskVariables.forEach((taskVariable) => {
-        if (systemVariableNames.has(taskVariable.name)) {
-            tl.warning("custom variable overlapping with reserved SWA variable: " + taskVariable.name)
-        } else {
-            addVariableToString(taskVariable.name, taskVariable.value)
-        }
-    })
-
-    await fs.writeFile(envVarFilePath, variableString, (error) => {
-        if(error) throw error;
-    });
+    const additionalEnvironmentVariables = tl.getInput("additional_environment_variables", false);
+    if (additionalEnvironmentVariables) {
+        // add at beginning of file because if multiple variables have same name, the last one wins
+        variableString = additionalEnvironmentVariables + "\n" + variableString;
+    }
+    await fs.promises.writeFile(envVarFilePath, variableString);
 }
 
 function getNullableBooleanFromString(boolString:string): boolean {
