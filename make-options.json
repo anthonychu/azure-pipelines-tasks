@@ -199,6 +199,7 @@
         "Strings",
         "task.json",
         "task.loc.json",
-        "Tests"
+        "Tests",
+        "envVarDenylist.json"
     ]
 }
