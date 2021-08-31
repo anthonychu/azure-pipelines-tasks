@@ -41,9 +41,9 @@ async function run() {
         await bash.exec(<any>options);
         tl.setResult(tl.TaskResult.Succeeded, null);
     } catch (err) {
-        tl.setResult(tl.TaskResult.Failed, null);
+        tl.setResult(tl.TaskResult.Failed, err);
     } finally {
-        await fs.promises.unlink(envVarFilePath);
+        await fs.promises.unlink(envVarFilePath).catch(() => console.warn("unable to delete env file"));
     }
 }
 
